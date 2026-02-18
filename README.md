@@ -1,0 +1,1 @@
+Si tam ešte treba stiahnuť to eigen https://libeigen.gitlab.io/ a dat priečinok eigen-5.0.0 vedľa src a data<img width="140" height="99" alt="obrázok" src="https://github.com/user-attachments/assets/cdbb5e3e-f44d-4d56-9a7d-51c71b280add" />
