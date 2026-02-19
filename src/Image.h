@@ -23,7 +23,7 @@ private:
 
 public:
 	Image() {};
-	Image(uchar* data, int w, int h);
+	Image(uchar* data, int w, int h, int bytesPerLine);
 
 	int getwidth() { return width; }
 	int getheight() { return height; }
@@ -34,4 +34,5 @@ public:
 	double* getLaplace() { return laplace.data(); }
 
 	void generateMask(int p);
+	void Laplace();
 };

@@ -45,10 +45,15 @@ bool ImageViewer::openImage(QString filename)
 {
 	QImage loadedImg(filename);
 	if (!loadedImg.isNull()) {
-		original = loadedImg.copy();
-		img_proc = Image(original.bits(), original.width(), original.height());
+		img_proc = Image(loadedImg.bits(), loadedImg.width(), loadedImg.height(), loadedImg.bytesPerLine());
 
 		radioButtonSetup();
+
+		qDebug() << loadedImg.format()
+			<< loadedImg.width()
+			<< loadedImg.height()
+			<< loadedImg.bytesPerLine();
+
 
 		return vW->setImage(loadedImg);
 	}
@@ -95,6 +100,8 @@ bool ImageViewer::invertColors()
 	return true;
 }
 
+
+//show functions
 bool ImageViewer::showOriginal()
 {
 	if (vW->isEmpty())
@@ -111,8 +118,9 @@ bool ImageViewer::showOriginal()
 	int height = img_proc.getheight();
 
 	for (int y = 0; y < height; y++) {
+		int row = y * width;
 		for (int x = 0; x < width; x++) {
-			int id = y * width + x;
+			int id = row + x;
 
 			uchar pixelValue = static_cast<uchar>(procData[id] * 255.0 + 0.5);
 
@@ -140,8 +148,9 @@ bool ImageViewer::showDamaged()
 	int height = img_proc.getheight();
 
 	for (int y = 0; y < height; y++) {
+		int row = y * width;
 		for (int x = 0; x < width; x++) {
-			int id = y * width + x;
+			int id = row + x;
 
 			uchar pixelValue =static_cast<uchar>(procData[id] * 255.0 + 0.5);
 
@@ -169,8 +178,9 @@ bool ImageViewer::showMask()
 	int height = img_proc.getheight();
 
 	for (int y = 0; y < height; y++) {
+		int row = y * width;
 		for (int x = 0; x < width; x++) {
-			int id = y * width + x;
+			int id = row + x;
 
 			uchar pixelValue = static_cast<uchar>(procData[id] * 255.0 + 0.5);
 
@@ -182,7 +192,35 @@ bool ImageViewer::showMask()
 	return true;
 }
 
+bool ImageViewer::showLaplace()
+{
+	if (vW->isEmpty())
+		return false;
 
+	double* procData = nullptr;
+
+	procData = img_proc.getLaplace();
+
+	if (!procData)
+		return false;
+
+	int width = img_proc.getwidth();
+	int height = img_proc.getheight();
+
+	for (int y = 0; y < height; y++) {
+		int row = y * width;
+		for (int x = 0; x < width; x++) {
+			int id = row + x;
+
+			uchar pixelValue = static_cast<uchar>(procData[id] * 255.0 + 0.5);
+
+			vW->setPixel(x, y, pixelValue);
+		}
+	}
+
+	vW->update();
+	return true;
+}
 
 
 void ImageViewer::radioButtonSetup()
@@ -261,10 +299,13 @@ void ImageViewer::onViewChanged(QAbstractButton* button)
 	}
 	else if (button == ui->radioButton_laplace)
 	{
-		//showLaplace();
+		showLaplace();
 	}
 }
 
+
+
+// push buttony
 void ImageViewer::on_pushButton_generateMask_clicked()
 {
 	ui->radioButton_mask->setEnabled(true);
@@ -284,5 +325,7 @@ void ImageViewer::on_pushButton_laplace_clicked()
 	ui->radioButton_laplace->setEnabled(true);
 	ui->radioButton_laplace->setChecked(true);
 
-	//showLaplace();
+	img_proc.Laplace();
+
+	showLaplace();
 }

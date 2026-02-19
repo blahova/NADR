@@ -24,7 +24,6 @@ private:
 	QSettings settings;
 	QMessageBox msgBox;
 
-	QImage original;
 	Image img_proc;
 
 	//ImageViewer Events
@@ -37,6 +36,7 @@ private:
 	bool showOriginal();
 	bool showDamaged();
 	bool showMask();
+	bool showLaplace();
 
 	void radioButtonSetup();
 
