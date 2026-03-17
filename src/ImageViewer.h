@@ -37,6 +37,7 @@ private:
 	bool showDamaged();
 	bool showMask();
 	bool showLaplace();
+	bool showSmooth();
 
 	void radioButtonSetup();
 
@@ -48,4 +49,5 @@ private slots:
 	void onViewChanged(QAbstractButton* button);
 	void on_pushButton_generateMask_clicked();
 	void on_pushButton_laplace_clicked();
+	void on_pushButton_smooth_clicked();
 };

@@ -20,6 +20,7 @@ private:
 	std::vector<uint8_t> mask;	//maska
 	std::vector<double> damaged;	//aplikacia masky na obrazok
 	std::vector<double> laplace;	//uz po laplaceovi
+	std::vector<double> smoothed;	//smooth
 
 public:
 	Image() {};
@@ -32,7 +33,9 @@ public:
 	uint8_t* getMask() { return mask.data(); }
 	double* getDamaged() { return damaged.data(); }
 	double* getLaplace() { return laplace.data(); }
+	double* getSmoothed() { return smoothed.data(); }
 
 	void generateMask(int p);
 	void Laplace();
+	void Smooth(double lambda);
 };

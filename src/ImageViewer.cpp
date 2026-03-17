@@ -23,6 +23,7 @@ ImageViewer::ImageViewer(QWidget* parent)
 	viewGroup->addButton(ui->radioButton_damaged);
 	viewGroup->addButton(ui->radioButton_mask);
 	viewGroup->addButton(ui->radioButton_laplace);
+	viewGroup->addButton(ui->radioButton_smooth);
 	connect(viewGroup, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked), this,&ImageViewer::onViewChanged);
 
 	radioButtonSetup();
@@ -222,6 +223,38 @@ bool ImageViewer::showLaplace()
 	return true;
 }
 
+bool ImageViewer::showSmooth()
+{
+	if (vW->isEmpty())
+		return false;
+
+	double* procData = nullptr;
+
+	procData = img_proc.getSmoothed();
+
+	if (!procData)
+		return false;
+
+	int width = img_proc.getwidth();
+	int height = img_proc.getheight();
+
+	for (int y = 0; y < height; y++) {
+		int row = y * width;
+		for (int x = 0; x < width; x++) {
+			int id = row + x;
+
+			uchar pixelValue = static_cast<uchar>(procData[id] * 255.0 + 0.5);
+
+			vW->setPixel(x, y, pixelValue);
+		}
+	}
+
+	vW->update();
+	return true;
+}
+
+
+
 
 void ImageViewer::radioButtonSetup()
 {
@@ -231,6 +264,7 @@ void ImageViewer::radioButtonSetup()
 	ui->radioButton_original->setChecked(true);
 
 	ui->pushButton_laplace->setEnabled(false);
+	ui->pushButton_smooth->setEnabled(false);
 }
 
 
@@ -301,6 +335,10 @@ void ImageViewer::onViewChanged(QAbstractButton* button)
 	{
 		showLaplace();
 	}
+	else if (button == ui->radioButton_smooth)
+	{
+		showSmooth();
+	}
 }
 
 
@@ -311,7 +349,9 @@ void ImageViewer::on_pushButton_generateMask_clicked()
 	ui->radioButton_mask->setEnabled(true);
 	ui->radioButton_damaged->setEnabled(true);
 	ui->radioButton_laplace->setEnabled(false);
+	ui->radioButton_smooth->setEnabled(false);
 	ui->pushButton_laplace->setEnabled(true);
+	ui->pushButton_smooth->setEnabled(false);
 
 	ui->radioButton_damaged->setChecked(true);
 
@@ -324,8 +364,20 @@ void ImageViewer::on_pushButton_laplace_clicked()
 {
 	ui->radioButton_laplace->setEnabled(true);
 	ui->radioButton_laplace->setChecked(true);
+	ui->radioButton_smooth->setEnabled(false);
+	ui->pushButton_smooth->setEnabled(true);
 
 	img_proc.Laplace();
 
 	showLaplace();
+}
+
+void ImageViewer::on_pushButton_smooth_clicked()
+{
+	ui->radioButton_smooth->setEnabled(true);
+	ui->radioButton_smooth->setChecked(true);
+
+	img_proc.Smooth(ui->doubleSpinBox_smooth->value());
+
+	showSmooth();
 }
