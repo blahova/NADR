@@ -50,4 +50,6 @@ private slots:
 	void on_pushButton_generateMask_clicked();
 	void on_pushButton_laplace_clicked();
 	void on_pushButton_smooth_clicked();
+
+	void on_pushButton_anisotropic_clicked();
 };

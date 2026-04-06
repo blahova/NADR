@@ -1,9 +1,12 @@
 #pragma once
+#define _USE_MATH_DEFINES
 #include <QVector>
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <filesystem>
 #include <random>
+#include <math.h>
 
 //eigen
 #include "Eigen/Sparse"
@@ -22,6 +25,13 @@ private:
 	std::vector<double> laplace;	//uz po laplaceovi
 	std::vector<double> smoothed;	//smooth
 
+	//ANIZOTROPNE
+	std::vector<std::vector<double>> anisotropic; //vektor na vysledky toho anizotropneho vypoctu
+	int N = 0;
+	double theta = 0.0;
+	double D[2][2];
+
+
 public:
 	Image() {};
 	Image(uchar* data, int w, int h, int bytesPerLine);
@@ -38,4 +48,9 @@ public:
 	void generateMask(int p);
 	void Laplace();
 	void Smooth(double lambda);
+
+	void setN (int n) { N = n; }
+	void setTheta(double t) { theta = t; }
+	void Anisotropic();
+	void setD();
 };

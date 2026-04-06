@@ -49,6 +49,7 @@ bool ImageViewer::openImage(QString filename)
 		img_proc = Image(loadedImg.bits(), loadedImg.width(), loadedImg.height(), loadedImg.bytesPerLine());
 
 		radioButtonSetup();
+		ui->pushButton_generateMask->setEnabled(true);
 
 		qDebug() << loadedImg.format()
 			<< loadedImg.width()
@@ -380,4 +381,16 @@ void ImageViewer::on_pushButton_smooth_clicked()
 	img_proc.Smooth(ui->doubleSpinBox_smooth->value());
 
 	showSmooth();
+}
+
+void ImageViewer::on_pushButton_anisotropic_clicked()
+{
+	int N = ui->comboBox_gridSize->currentText().toInt();
+	double theta = ui->comboBox_theta->currentText().toDouble();
+
+	img_proc.setN(N);
+	img_proc.setTheta(theta);
+
+	img_proc.Anisotropic();
+
 }
