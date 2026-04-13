@@ -173,7 +173,10 @@
              <item>
               <widget class="QComboBox" name="comboBox_gridSize">
                <property name="currentText">
-                <string>60</string>
+                <string>80</string>
+               </property>
+               <property name="currentIndex">
+                <number>2</number>
                </property>
                <item>
                 <property name="text">
@@ -183,11 +186,6 @@
                <item>
                 <property name="text">
                  <string>40</string>
-                </property>
-               </item>
-               <item>
-                <property name="text">
-                 <string>60</string>
                 </property>
                </item>
                <item>
@@ -250,6 +248,13 @@
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="pushButton_EOC">
+            <property name="text">
+             <string>EOC</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </widget>
        </item>
@@ -279,7 +284,7 @@
         <rect>
          <x>0</x>
          <y>0</y>
-         <width>645</width>
+         <width>668</width>
          <height>571</height>
         </rect>
        </property>

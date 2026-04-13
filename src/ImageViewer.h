@@ -52,4 +52,5 @@ private slots:
 	void on_pushButton_smooth_clicked();
 
 	void on_pushButton_anisotropic_clicked();
+	void on_pushButton_EOC_clicked();
 };

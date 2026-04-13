@@ -26,7 +26,6 @@ private:
 	std::vector<double> smoothed;	//smooth
 
 	//ANIZOTROPNE
-	std::vector<std::vector<double>> anisotropic; //vektor na vysledky toho anizotropneho vypoctu
 	int N = 0;
 	double theta = 0.0;
 	double D[2][2];
@@ -51,6 +50,6 @@ public:
 
 	void setN (int n) { N = n; }
 	void setTheta(double t) { theta = t; }
-	void Anisotropic();
+	double Anisotropic(bool exportData);
 	void setD();
 };

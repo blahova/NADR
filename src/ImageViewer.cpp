@@ -391,6 +391,34 @@ void ImageViewer::on_pushButton_anisotropic_clicked()
 	img_proc.setN(N);
 	img_proc.setTheta(theta);
 
-	img_proc.Anisotropic();
+	img_proc.Anisotropic(true);
 
+}
+
+
+void ImageViewer::on_pushButton_EOC_clicked()
+{
+	double theta = ui->comboBox_theta->currentText().toDouble();
+
+	std::vector<int> grids = { 20, 40, 80, 160 };
+	std::vector<double> errors;
+
+	for (int N : grids)
+	{
+		img_proc.setN(N);
+		img_proc.setTheta(theta);
+
+		double err = img_proc.Anisotropic(false);
+		errors.push_back(err);
+
+		std::cout << "N=" << N << " error=" << err << std::endl;
+	}
+
+	std::cout << "\nEOC for theta "<<theta<<":\n";
+	for (size_t i = 1; i < errors.size(); i++)
+	{
+		double eoc = log(errors[i - 1] / errors[i]) / log(2.0);
+		std::cout << "N=" << grids[i]
+			<< " EOC=" << eoc << std::endl;
+	}
 }
