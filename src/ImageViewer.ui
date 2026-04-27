@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>818</width>
-    <height>646</height>
+    <height>678</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -223,6 +223,11 @@
               <widget class="QComboBox" name="comboBox_theta">
                <item>
                 <property name="text">
+                 <string>5</string>
+                </property>
+               </item>
+               <item>
+                <property name="text">
                  <string>10</string>
                 </property>
                </item>
@@ -239,6 +244,43 @@
               </widget>
              </item>
             </layout>
+           </widget>
+          </item>
+          <item>
+           <widget class="QComboBox" name="comboBox_method">
+            <property name="currentIndex">
+             <number>0</number>
+            </property>
+            <item>
+             <property name="text">
+              <string>Classic</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>ADCM</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>S1 FBDS cl</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>S2 FBDS cl</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>S1 FBDS an</string>
+             </property>
+            </item>
+            <item>
+             <property name="text">
+              <string>S2 FBDS an</string>
+             </property>
+            </item>
            </widget>
           </item>
           <item>
@@ -285,7 +327,7 @@
          <x>0</x>
          <y>0</y>
          <width>668</width>
-         <height>571</height>
+         <height>603</height>
         </rect>
        </property>
       </widget>

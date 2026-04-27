@@ -50,6 +50,13 @@ public:
 
 	void setN (int n) { N = n; }
 	void setTheta(double t) { theta = t; }
-	double Anisotropic(bool exportData);
+	double Anisotropic_Classic(bool exportData);	//klasicka anizotropna difuzia
+	double Anisotropic_Modified(bool exportData);	//modifikovana anizotropna difuzia (ADCM)
+	double S1_FBDS_Classic(bool exportData);		//S1 Forward-Backward Diffusion Scheme - klasicka anizotropna difuzia
+	double S2_FBDS_Classic(bool exportData);		//S2 Forward-Backward Diffusion Scheme - klasicka anizotropna difuzia
+	double S1_FBDS_ADCM(bool exportData);			//S1 Forward-Backward Diffusion Scheme - modifikovana anizotropna difuzia (ADCM)
+	double S2_FBDS_ADCM(bool exportData);			//S2 Forward-Backward Diffusion Scheme - modifikovana anizotropna difuzia (ADCM)
+
+
 	void setD();
 };

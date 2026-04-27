@@ -385,13 +385,27 @@ void ImageViewer::on_pushButton_smooth_clicked()
 
 void ImageViewer::on_pushButton_anisotropic_clicked()
 {
+	int metoda = ui->comboBox_method->currentIndex();
+
 	int N = ui->comboBox_gridSize->currentText().toInt();
 	double theta = ui->comboBox_theta->currentText().toDouble();
 
 	img_proc.setN(N);
 	img_proc.setTheta(theta);
 
-	img_proc.Anisotropic(true);
+	if (metoda == 0)
+		img_proc.Anisotropic_Classic(true);
+	else if(metoda==1)
+		img_proc.Anisotropic_Modified(true);
+	else if (metoda == 2)
+		img_proc.S1_FBDS_Classic(true);
+	else if (metoda == 3)
+		img_proc.S2_FBDS_Classic(true);
+	else if (metoda == 4)
+		img_proc.S1_FBDS_ADCM(true);
+	else if (metoda == 5)
+		img_proc.S2_FBDS_ADCM(true);
+	
 
 }
 
@@ -399,16 +413,32 @@ void ImageViewer::on_pushButton_anisotropic_clicked()
 void ImageViewer::on_pushButton_EOC_clicked()
 {
 	double theta = ui->comboBox_theta->currentText().toDouble();
+	int metoda = ui->comboBox_method->currentIndex();
 
 	std::vector<int> grids = { 20, 40, 80, 160 };
 	std::vector<double> errors;
+
+	std::cout << "\nERRORS for theta " << theta << ":\n";
 
 	for (int N : grids)
 	{
 		img_proc.setN(N);
 		img_proc.setTheta(theta);
 
-		double err = img_proc.Anisotropic(false);
+		double err;
+
+		if (metoda == 0)
+			err = img_proc.Anisotropic_Classic(false);
+		else if (metoda == 1)
+			err = img_proc.Anisotropic_Modified(false);
+		else if (metoda == 2)
+			err = img_proc.S1_FBDS_Classic(false);
+		else if (metoda == 3)
+			err = img_proc.S2_FBDS_Classic(false);
+		else if (metoda == 4)
+			err = img_proc.S1_FBDS_ADCM(false);
+		else if (metoda == 5)
+			err = img_proc.S2_FBDS_ADCM(false);
 		errors.push_back(err);
 
 		std::cout << "N=" << N << " error=" << err << std::endl;
@@ -419,6 +449,6 @@ void ImageViewer::on_pushButton_EOC_clicked()
 	{
 		double eoc = log(errors[i - 1] / errors[i]) / log(2.0);
 		std::cout << "N=" << grids[i]
-			<< " EOC=" << eoc << std::endl;
+			<< " EOC=" << eoc << std::endl ;
 	}
 }
