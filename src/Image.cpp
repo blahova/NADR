@@ -313,20 +313,19 @@ double Image::Anisotropic_Classic(bool exportData)
 		}
 	}
 
-	// prvotny error
-	for (int i = 0; i < height; i++)
-	{
-		double y = -1.0 -h/2 + i * h;
-		for (int j = 0; j < width; j++)
-		{
-			double x = -1.0 -h/2 + j * h;
-			int k = i * width + j;
+	double scale = tau / (h * h);
+	double alpha = D[0][0];
+	double beta = D[1][1];
+	double gamma = D[0][1];
 
-			double exact = u_exact(x, y, Tstart, &D[0][0]);
-			double diff = u_old[k] - exact;
-			error_sum += diff * diff;
-		}
-	}
+	const int d[8] = { +1, -1, +width, -width,
+					+width + 1, +width - 1,
+					-width + 1, -width - 1 };
+
+	double b[8] = { alpha, alpha,
+					beta,  beta,
+					gamma / 2.0, -gamma / 2.0,
+					-gamma / 2.0, gamma / 2.0 };  // E,W,N,S,NE,NW,SE,SW
 
 	std::string folder = "DCM_Classic";
 	if (exportData)
@@ -353,57 +352,25 @@ double Image::Anisotropic_Classic(bool exportData)
 	Eigen::SparseMatrix<double, Eigen::RowMajor> M(size, size);
 	M.reserve(Eigen::VectorXi::Constant(size, 9));
 
-	double scale = tau / (h * h);
-	double alpha = D[0][0];
-	double beta = D[1][1];
-	double gamma = D[0][1];
-
 	for (int i = 0; i < height; i++)
 	{
 		for (int j = 0; j < width; j++)
 		{
 			int k = i * width + j;
-
-			bool isBoundary = (i == 0 || i == height - 1 || j == 0 || j == width - 1);
-
-			if (isBoundary)
+			if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
 			{
 				M.insert(k, k) = 1.0;
 				continue;
 			}
 
-			int kE = k + 1;
-			int kW = k - 1;
-			int kN = k + width;
-			int kS = k - width;
-
-			int kNE = kN + 1;
-			int kNW = kN - 1;
-			int kSE = kS + 1;
-			int kSW = kS - 1;
-
-			double bE = alpha;
-			double bW = alpha;
-			double bN = beta;
-			double bS = beta;
-			double bNE = gamma / 2.0;
-			double bNW = -gamma / 2.0;
-			double bSW = gamma / 2.0;
-			double bSE = -gamma / 2.0;
-
-			double bcenter = (bE + bW + bN + bS + bNE + bNW + bSE + bSW);
-
+			double bcenter = 0.0;
+			for (int s = 0; s < 8; s++)
+			{
+				int q = k + d[s];
+				M.insert(k, q) = -scale * b[s];
+				bcenter += b[s];
+			}
 			M.insert(k, k) = 1.0 + scale * bcenter;
-
-			M.insert(k, kE) = -scale * bE;
-			M.insert(k, kW) = -scale * bW;
-			M.insert(k, kN) = -scale * bN;
-			M.insert(k, kS) = -scale * bS;
-
-			M.insert(k, kNE) = -scale * bNE;
-			M.insert(k, kNW) = -scale * bNW;
-			M.insert(k, kSE) = -scale * bSE;
-			M.insert(k, kSW) = -scale * bSW;
 		}
 	}
 
@@ -411,7 +378,8 @@ double Image::Anisotropic_Classic(bool exportData)
 	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
 	solver.compute(M);
 
-	int steps = static_cast<int>((Tend - Tstart) / tau);
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
+
 
 	for (int n = 0; n < steps; n++)
 	{
@@ -512,21 +480,6 @@ double Image::Anisotropic_Modified(bool exportData)
 		}
 	}
 
-	// prvotny error
-	for (int i = 0; i < height; i++)
-	{
-		double y = -1.0 - h / 2 + i * h;
-		for (int j = 0; j < width; j++)
-		{
-			double x = -1.0 - h / 2 + j * h;
-			int k = i * width + j;
-
-			double exact = u_exact(x, y, Tstart, &D[0][0]);
-			double diff = u_old[k] - exact;
-			error_sum += diff * diff;
-		}
-	}
-
 	std::string folder = "ADCM_Modified";
 	if (exportData)
 	{
@@ -563,63 +516,41 @@ double Image::Anisotropic_Modified(bool exportData)
 	double w1 = 0.5 * (lambda1 / (lambda1 + lambda2));
 	double w2 = 0.5 * (lambda2 / (lambda1 + lambda2));
 
-	//std::cout << "alpha=" << alpha
-	//	<< " beta=" << beta
-	//	<< " gamma=" << gamma << std::endl;
 
-	//std::cout << "lambda1=" << lambda1
-	//	<< " lambda2=" << lambda2 << std::endl;
+	double b[8] = {
+	alpha + 2 * gamma * (w1 - w2),   // E
+	alpha + 2 * gamma * (w1 - w2),   // W
+	beta + 2 * gamma * (w1 - w2),   // N
+	beta + 2 * gamma * (w1 - w2),   // S
+	2 * gamma * w2,                 // NE
+	-2 * gamma * w1,                // NW
+	-2 * gamma * w1,                // SE  
+	2 * gamma * w2                  // SW  
+	};
 
-	//std::cout << "w1=" << w1
-	//	<< " w2=" << w2 << std::endl;
-	//std::cout << "w1+w2=" << w1 + w2 << std::endl;
+	const int d[8] = { +1, -1, +width, -width,
+						+width + 1, +width - 1,
+						-width + 1, -width - 1 };
 
 	for (int i = 0; i < height; i++)
 	{
 		for (int j = 0; j < width; j++)
 		{
 			int k = i * width + j;
-
-			bool isBoundary = (i == 0 || i == height - 1 || j == 0 || j == width - 1);
-
-			if (isBoundary)
+			if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
 			{
 				M.insert(k, k) = 1.0;
 				continue;
 			}
 
-			int kE = k + 1;
-			int kW = k - 1;
-			int kN = k + width;
-			int kS = k - width;
-
-			int kNE = kN + 1;
-			int kNW = kN - 1;
-			int kSE = kS + 1;
-			int kSW = kS - 1;
-
-			double bE = alpha + 2 * gamma * (w1 - w2);
-			double bW = alpha + 2 * gamma * (w1 - w2);
-			double bN = beta + 2 * gamma * (w1 - w2);
-			double bS = beta + 2 * gamma * (w1 - w2);
-			double bNE = 2 * gamma * w2;
-			double bSW = 2 * gamma * w2;
-			double bNW = -2 * gamma * w1;
-			double bSE = -2 * gamma * w1;
-
-			double bcenter = (bE + bW + bN + bS + bNE + bNW + bSE + bSW);
-
+			double bcenter = 0.0;
+			for (int s = 0; s < 8; s++)
+			{
+				int q = k + d[s];
+				M.insert(k, q) = -scale * b[s];
+				bcenter += b[s];
+			}
 			M.insert(k, k) = 1.0 + scale * bcenter;
-
-			M.insert(k, kE) = -scale * bE;
-			M.insert(k, kW) = -scale * bW;
-			M.insert(k, kN) = -scale * bN;
-			M.insert(k, kS) = -scale * bS;
-
-			M.insert(k, kNE) = -scale * bNE;
-			M.insert(k, kNW) = -scale * bNW;
-			M.insert(k, kSE) = -scale * bSE;
-			M.insert(k, kSW) = -scale * bSW;
 		}
 	}
 
@@ -627,7 +558,7 @@ double Image::Anisotropic_Modified(bool exportData)
 	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
 	solver.compute(M);
 
-	int steps = static_cast<int>((Tend - Tstart) / tau);
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
 
 	for (int n = 0; n < steps; n++)
 	{
@@ -701,276 +632,6 @@ double Image::Anisotropic_Modified(bool exportData)
 	return std::sqrt(tau * h * h * error_sum);
 }
 
-//double Image::S1_FBDS_Classic(bool exportData)
-//{
-//
-//	setD();
-//
-//	int width = N + 2;
-//	int height = N + 2;
-//	int size = width * height;
-//
-//	std::vector<double> u_old(size, 0.0);
-//
-//	double h = 2.0 / N;
-//	double tau = h * h;
-//	double Tstart = 0.2;
-//	double Tend = 0.3;
-//	double error_sum = 0.0;
-//
-//	//INIT 
-//	for (int i = 0; i < height; i++)
-//	{
-//		double y = -1.0 - h / 2 + i * h;
-//		for (int j = 0; j < width; j++)
-//		{
-//			double x = -1.0 - h / 2 + j * h;
-//			u_old[i * width + j] = u_exact(x, y, Tstart, &D[0][0]);
-//		}
-//	}
-//
-//	// prvotny error
-//	for (int i = 0; i < height; i++)
-//	{
-//		double y = -1.0 - h / 2 + i * h;
-//		for (int j = 0; j < width; j++)
-//		{
-//			double x = -1.0 - h / 2 + j * h;
-//			int k = i * width + j;
-//
-//			double exact = u_exact(x, y, Tstart, &D[0][0]);
-//			double diff = u_old[k] - exact;
-//			error_sum += diff * diff;
-//		}
-//	}
-//
-//	std::string folder = "S1_FBDS_Classic";
-//	if (exportData)
-//	{
-//		std::filesystem::create_directories(folder);
-//		std::string filename = folder + "/step_0_N" + std::to_string(N) +
-//			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
-//
-//		std::ofstream file(filename);
-//
-//		for (int i = 0; i < height; i++)
-//		{
-//			for (int j = 0; j < width; j++)
-//			{
-//				file << u_old[i * width + j];
-//				if (j < width - 1) file << ",";
-//			}
-//			file << "\n";
-//		}
-//		file.close();
-//	}
-//
-//	Eigen::SparseMatrix<double, Eigen::RowMajor> M(size, size);
-//	M.reserve(Eigen::VectorXi::Constant(size, 9));
-//
-//	double scale = tau / (h * h);
-//	double alpha = D[0][0];
-//	double beta = D[1][1];
-//	double gamma = D[0][1];
-//
-//	for (int i = 0; i < height; i++)
-//	{
-//		for (int j = 0; j < width; j++)
-//		{
-//			int k = i * width + j;
-//
-//			bool isBoundary = (i == 0 || i == height - 1 || j == 0 || j == width - 1);
-//
-//			if (isBoundary)
-//			{
-//				M.insert(k, k) = 1.0;
-//				continue;
-//			}
-//
-//			//smery E, W, N, S, NE, NW, SE, SW
-//			const int d[8] = { +1, -1, +width, -width,
-//					+width + 1, +width - 1,
-//					-width + 1, -width - 1 };
-//
-//			//koeficienty pre jednotlive smery  v tom poradi ako su v poli d
-//			double b[8] = {alpha, alpha,
-//							beta, beta,
-//							gamma / 2.0, -gamma / 2.0,
-//							gamma / 2.0, -gamma / 2.0};
-//
-//			//tu ulozim tie koef forw/back nech to nemusim vsetko zvlast indexovat
-//			double b_forw[8], b_back[8];
-//
-//			for (int i = 0; i < 8; i++)
-//			{
-//				b_forw[i] = std::max(0.0, b[i]);
-//				b_back[i] = std::min(0.0, b[i]);
-//			}
-//
-//			//tu sa mi budu sumovat
-//			double np_plus = 0.0;
-//			double np_minus = 0.0;
-//
-//
-//			for (int i = 0; i < 8; i++)
-//			{
-//				int q = k + d[i];	//koeficient suseda q
-//
-//				double flux = b_back[i] * (u_old[k] - u_old[q]); //vnutro tej sumy
-//
-//				//ze kam sa to ulozi, kedze b_back je vzdy zaporne tak to zalezi jedine od toho rozdielu u_old[k] - u_old[q]
-//				//kazdopadne tu to checknem ze kam sa to vlastne ma ulozit, to vnutro sumy je rovnake
-//				if (u_old[k] > u_old[q])
-//					np_plus += flux;
-//				else
-//					np_minus += flux;
-//			}
-//			//tam mame minuska so thats what this is
-//			np_plus = -np_plus;
-//			np_minus = -np_minus;
-//
-//			//okej so ja potrebujem vediet bounds toho predosleho kroku, to sa pouziva v theta+ a -
-//			double umin = u_old[0];
-//			double umax = u_old[0];
-//
-//			for (int k = 0; k < size; k++)
-//			{
-//				umin = std::min(umin, u_old[k]);
-//				umax = std::max(umax, u_old[k]);
-//			}
-//
-//			double up = u_old[k];
-//
-//			//toto sa musi vyratat pre vsetky body, potrebujem aj susedov
-//			std::vector<double> theta_plus(size);
-//			std::vector<double> theta_minus(size);
-//			for (int k = 0; k < size; k++)
-//			{
-//				if (isBoundary) continue;
-//
-//				double up = u_old[k];
-//
-//				double theta_p_plus = std::min(1.0, ((umax - up) * h * h) / (tau * np_plus));
-//
-//				double theta_p_minus = std::min(1.0, ((umin - up) * h * h) / (tau * np_minus));
-//
-//				theta_plus[k] = theta_p_plus;
-//				theta_minus[k] = theta_p_minus;
-//			}
-//
-//			//teraz uz mozem to theta_pq najst
-//			for (int k = 0; k < size; k++)
-//			{
-//				for (int i = 0; i < 8; i++)
-//				{
-//					int q = k + d[i];
-//
-//					double theta_pq;
-//
-//					if (u_old[k] > u_old[q])
-//						theta_pq = std::min(theta_plus[k], theta_minus[q]);
-//					else
-//						theta_pq = std::min(theta_minus[k], theta_plus[q]);
-//
-//					double b_mod = theta_pq * b[i];
-//				}
-//			}
-//
-//
-//			double bcenter = (bE + bW + bN + bS + bNE + bNW + bSE + bSW);
-//
-//			M.insert(k, k) = 1.0 + scale * bcenter;
-//
-//			M.insert(k, kE) = -scale * bE;
-//			M.insert(k, kW) = -scale * bW;
-//			M.insert(k, kN) = -scale * bN;
-//			M.insert(k, kS) = -scale * bS;
-//
-//			M.insert(k, kNE) = -scale * bNE;
-//			M.insert(k, kNW) = -scale * bNW;
-//			M.insert(k, kSE) = -scale * bSE;
-//			M.insert(k, kSW) = -scale * bSW;
-//		}
-//	}
-//
-//	M.makeCompressed();
-//	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
-//	solver.compute(M);
-//
-//	int steps = static_cast<int>((Tend - Tstart) / tau);
-//
-//	for (int n = 0; n < steps; n++)
-//	{
-//		double t_n = Tstart + n * tau;
-//
-//		Eigen::VectorXd b(size);
-//
-//		for (int i = 0; i < height; i++)
-//		{
-//			double y = -1.0 - h / 2. + i * h;
-//			for (int j = 0; j < width; j++)
-//			{
-//				int k = i * width + j;
-//				double x = -1.0 - h / 2. + j * h;
-//
-//				bool isBoundary = (i == 0 || i == height - 1 || j == 0 || j == width - 1);
-//
-//				if (isBoundary)
-//				{
-//					b(k) = u_exact(x, y, t_n + tau, &D[0][0]);
-//				}
-//				else
-//				{
-//					b(k) = u_old[k];
-//				}
-//			}
-//		}
-//
-//		Eigen::VectorXd sol = solver.solve(b);
-//
-//		for (int k = 0; k < size; k++)
-//			u_old[k] = sol(k);
-//
-//		// error
-//		for (int i = 0; i < height; i++)
-//		{
-//			double y = -1.0 - h / 2 + i * h;
-//			for (int j = 0; j < width; j++)
-//			{
-//				double x = -1.0 - h / 2 + j * h;
-//				int k = i * width + j;
-//
-//				double exact = u_exact(x, y, t_n + tau, &D[0][0]);
-//				double diff = u_old[k] - exact;
-//
-//				error_sum += diff * diff;
-//			}
-//		}
-//	}
-//
-//	// EXPORT FINAL
-//	if (exportData)
-//	{
-//		std::string finalName = folder + "/final_N" + std::to_string(N) +
-//			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
-//
-//		std::ofstream finalFile(finalName);
-//
-//		for (int i = 0; i < height; i++)
-//		{
-//			for (int j = 0; j < width; j++)
-//			{
-//				finalFile << u_old[i * width + j];
-//				if (j < width - 1) finalFile << ",";
-//			}
-//			finalFile << "\n";
-//		}
-//		finalFile.close();
-//	}
-//
-//	return std::sqrt(tau * h * h * error_sum);
-//}
-
 double Image::S1_FBDS_Classic(bool exportData)
 {
 	setD();
@@ -999,19 +660,19 @@ double Image::S1_FBDS_Classic(bool exportData)
 	}
 
 	// prvotny error
-	for (int i = 0; i < height; i++)
-	{
-		double y = -1.0 - h / 2 + i * h;
-		for (int j = 0; j < width; j++)
-		{
-			double x = -1.0 - h / 2 + j * h;
-			int k = i * width + j;
+	//for (int i = 0; i < height; i++)
+	//{
+	//	double y = -1.0 - h / 2 + i * h;
+	//	for (int j = 0; j < width; j++)
+	//	{
+	//		double x = -1.0 - h / 2 + j * h;
+	//		int k = i * width + j;
 
-			double exact = u_exact(x, y, Tstart, &D[0][0]);
-			double diff = u_old[k] - exact;
-			error_sum += diff * diff;
-		}
-	}
+	//		double exact = u_exact(x, y, Tstart, &D[0][0]);
+	//		double diff = u_old[k] - exact;
+	//		error_sum += diff * diff;
+	//	}
+	//}
 
 	std::string folder = "S1_FBDS_Classic";
 	if (exportData)
@@ -1093,7 +754,7 @@ double Image::S1_FBDS_Classic(bool exportData)
 		std::cout << "decomposition failed" << std::endl;
 
 
-	int steps = static_cast<int>((Tend - Tstart) / tau);
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
 
 	for (int n = 0; n < steps; n++)
 	{
@@ -1134,8 +795,8 @@ double Image::S1_FBDS_Classic(bool exportData)
 		{
 			double up = u_old[k];
 			//to checkuje ci to neni nula, lebo nechcem delit nulou
-			theta_plus[k] = (np_plus[k] > 1e-14) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0; 
-			theta_minus[k] = (np_minus[k] < -1e-14) ? std::min(1.0, (umin-up) * h * h / (tau * np_minus[k])) : 1.0;
+			theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0; 
+			theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin-up) * h * h / (tau * np_minus[k])) : 1.0;
 		}
 
 
@@ -1160,7 +821,7 @@ double Image::S1_FBDS_Classic(bool exportData)
 				for (int s = 0; s < 8; s++)
 				{
 					int q = k + d[s];
-					double theta_pq;
+					double theta_pq=1.0;
 					if (u_old[k] > u_old[q])
 						theta_pq = std::min(theta_plus[k], theta_minus[q]);
 					else
@@ -1178,6 +839,8 @@ double Image::S1_FBDS_Classic(bool exportData)
 
 		for (int k = 0; k < size; k++)
 			u_old[k] = sol(k);
+
+
 
 		// error
 		for (int i = 0; i < height; i++)
@@ -1219,17 +882,808 @@ double Image::S1_FBDS_Classic(bool exportData)
 
 double Image::S2_FBDS_Classic(bool exportData)
 {
-	return 0.0;
+	setD();
+
+	int width = N + 2;
+	int height = N + 2;
+	int size = width * height;
+
+	std::vector<double> u_old(size, 0.0);
+
+	double h = 2.0 / N;
+	double tau = h * h;
+	double Tstart = 0.2;
+	double Tend = 0.3;
+	double error_sum = 0.0;
+
+	//INIT 
+	for (int i = 0; i < height; i++)
+	{
+		double y = -1.0 - h / 2 + i * h;
+		for (int j = 0; j < width; j++)
+		{
+			double x = -1.0 - h / 2 + j * h;
+			u_old[i * width + j] = u_exact(x, y, Tstart, &D[0][0]);
+		}
+	}
+
+	// prvotny error
+	//for (int i = 0; i < height; i++)
+	//{
+	//	double y = -1.0 - h / 2 + i * h;
+	//	for (int j = 0; j < width; j++)
+	//	{
+	//		double x = -1.0 - h / 2 + j * h;
+	//		int k = i * width + j;
+
+	//		double exact = u_exact(x, y, Tstart, &D[0][0]);
+	//		double diff = u_old[k] - exact;
+	//		error_sum += diff * diff;
+	//	}
+	//}
+
+	std::string folder = "S2_FBDS_Classic";
+	if (exportData)
+	{
+		std::filesystem::create_directories(folder);
+		std::string filename = folder + "/step_0_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream file(filename);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				file << u_old[i * width + j];
+				if (j < width - 1) file << ",";
+			}
+			file << "\n";
+		}
+		file.close();
+	}
+
+
+	double scale = tau / (h * h);
+	double alpha = D[0][0];
+	double beta = D[1][1];
+	double gamma = D[0][1];
+
+	//smery E, W, N, S, NE, NW, SE, SW
+	const int d[8] = { +1, -1, +width, -width,
+			+width + 1, +width - 1,
+			-width + 1, -width - 1 };
+
+	//koeficienty pre jednotlive smery  v tom poradi ako su v poli d
+	double b[8] = { alpha, alpha,
+					beta, beta,
+					gamma / 2.0, -gamma / 2.0,
+					-gamma / 2.0, gamma / 2.0 };
+
+	//tu ulozim tie koef forw/back nech to nemusim vsetko zvlast indexovat
+	double b_forw[8], b_back[8];
+
+	for (int i = 0; i < 8; i++)
+	{
+		b_forw[i] = std::max(0.0, b[i]);
+		b_back[i] = std::min(0.0, b[i]);
+	}
+
+	Eigen::SparseMatrix<double, Eigen::RowMajor> M(size, size);
+	M.reserve(Eigen::VectorXi::Constant(size, 9));
+
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			int k = i * width + j;
+
+			if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+			{
+				M.insert(k, k) = 1.0;
+				continue;
+			}
+
+			double bcenter = 0.0;
+			for (int s = 0; s < 8; s++)
+			{
+				int q = k + d[s];
+				if (b_forw[s] > 0.0)
+					M.insert(k, q) = -scale * b_forw[s];
+				bcenter += b_forw[s];
+			}
+			M.insert(k, k) = 1.0 + scale * bcenter;
+		}
+	}
+	M.makeCompressed();
+	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+	solver.compute(M);
+	if (solver.info() != Eigen::Success)
+		std::cout << "decomposition failed" << std::endl;
+
+
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
+
+	for (int n = 0; n < steps; n++)
+	{
+		double t_n = Tstart + n * tau;
+
+		double umin = *std::min_element(u_old.begin(), u_old.end());
+		double umax = *std::max_element(u_old.begin(), u_old.end());
+
+		//prvy solve, theta_pq je vlastne =1, lebo nedavame limit
+		Eigen::VectorXd rhs(size);
+
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2. + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				int k = i * width + j;
+				double x = -1.0 - h / 2. + j * h;
+
+				if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+				{
+					rhs(k) = u_exact(x, y, t_n + tau, &D[0][0]);
+					continue;
+				}
+
+				rhs(k) = u_old[k];
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+					double flux = b_back[s] * (u_old[k] - u_old[q]); //(thetu ani nepisem lebo 1)
+					rhs(k) -= scale * flux;
+				}
+			}
+		}
+		Eigen::VectorXd sol = solver.solve(rhs);//solve bez limitu
+
+		//ulozim si ktore to porusuju
+		std::vector<bool> violates(size, false);
+		bool anyViolation = false;
+
+		for (int k = 0; k < size; k++)
+		{
+			if (sol(k) < umin || sol(k) > umax)
+			{
+				violates[k] = true;
+				anyViolation = true;
+			}
+		}
+
+		//akoze teoreticky sa moze stat ze to sa nestane, right? idk
+		if (anyViolation)
+		{
+			std::vector<double> np_plus(size, 0.0);
+			std::vector<double> np_minus(size, 0.0);
+
+			for (int i = 1; i < height - 1; i++)
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+					for (int s = 0; s < 8; s++)
+					{
+						int q = k + d[s];
+						double flux = b_back[s] * (u_old[k] - u_old[q]);
+						if (u_old[k] > u_old[q])
+							np_plus[k] += flux;
+						else
+							np_minus[k] += flux;
+					}
+					np_plus[k] = -np_plus[k];
+					np_minus[k] = -np_minus[k];
+				}
+
+			std::vector<double> theta_plus(size, 1.0);
+			std::vector<double> theta_minus(size, 1.0);
+
+			for (int k = 0; k < size; k++)
+			{
+				double up = u_old[k];
+				theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0;
+				theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k])) : 1.0;
+			}
+
+			//teraz nova prava strana, ale len pre tie ktore porusuju min/max, ostatne zostanu rovnake
+			for (int i = 1; i < height - 1; i++)
+			{
+				double y = -1.0 - h / 2. + i * h;
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+
+					if (!violates[k])
+						continue;  
+
+					double x = -1.0 - h / 2. + j * h;
+					rhs(k) = u_old[k];
+
+					for (int s = 0; s < 8; s++)
+					{
+						int q = k + d[s];
+						double theta_pq;
+						if (u_old[k] > u_old[q])
+							theta_pq = std::min(theta_plus[k], theta_minus[q]);
+						else
+							theta_pq = std::min(theta_minus[k], theta_plus[q]);
+
+						double flux = theta_pq * b_back[s] * (u_old[k] - u_old[q]);
+						rhs(k) -= scale * flux;
+					}
+				}
+			}
+
+			sol = solver.solve(rhs);
+
+			if (solver.info() != Eigen::Success)
+				std::cout << "solve failed at step " << n << std::endl;
+		}
+		//toto je rovnaku odtialto
+		for (int k = 0; k < size; k++)
+			u_old[k] = sol(k);
+
+		// error
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2 + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				double x = -1.0 - h / 2 + j * h;
+				int k = i * width + j;
+				double exact = u_exact(x, y, t_n + tau, &D[0][0]);
+				double diff = u_old[k] - exact;
+				error_sum += diff * diff;
+			}
+		}
+	}
+
+	// EXPORT FINAL
+	if (exportData)
+	{
+		std::string finalName = folder + "/final_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream finalFile(finalName);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				finalFile << u_old[i * width + j];
+				if (j < width - 1) finalFile << ",";
+			}
+			finalFile << "\n";
+		}
+		finalFile.close();
+	}
+
+	return std::sqrt(tau * h * h * error_sum);
 }
 
 double Image::S1_FBDS_ADCM(bool exportData)
 {
-	return 0.0;
+
+	setD();
+
+	int width = N + 2;
+	int height = N + 2;
+	int size = width * height;
+
+	std::vector<double> u_old(size, 0.0);
+
+	double h = 2.0 / N;
+	double tau = h * h;
+	double Tstart = 0.2;
+	double Tend = 0.3;
+	double error_sum = 0.0;
+
+	//INIT 
+	for (int i = 0; i < height; i++)
+	{
+		double y = -1.0 - h / 2 + i * h;
+		for (int j = 0; j < width; j++)
+		{
+			double x = -1.0 - h / 2 + j * h;
+			u_old[i * width + j] = u_exact(x, y, Tstart, &D[0][0]);
+		}
+	}
+
+
+	std::string folder = "S1_FBDS_ADCM";
+	if (exportData)
+	{
+		std::filesystem::create_directories(folder);
+		std::string filename = folder + "/step_0_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream file(filename);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				file << u_old[i * width + j];
+				if (j < width - 1) file << ",";
+			}
+			file << "\n";
+		}
+		file.close();
+	}
+
+
+	double scale = tau / (h * h);
+	double alpha = D[0][0];
+	double beta = D[1][1];
+	double gamma = D[0][1];
+
+	//smery E, W, N, S, NE, NW, SE, SW
+	const int d[8] = { +1, -1, +width, -width,
+			+width + 1, +width - 1,
+			-width + 1, -width - 1 };
+
+	//koeficienty pre jednotlive smery  v tom poradi ako su v poli d
+	double lambda1 = (alpha + beta + sqrt((alpha - beta) * (alpha - beta) + 4 * gamma * gamma)) / 2.;
+	double lambda2 = (alpha + beta - sqrt((alpha - beta) * (alpha - beta) + 4 * gamma * gamma)) / 2.;
+	double w1 = 0.5 * (lambda1 / (lambda1 + lambda2));
+	double w2 = 0.5 * (lambda2 / (lambda1 + lambda2));
+
+
+	double b[8] = {
+	alpha + 2 * gamma * (w1 - w2),   // E
+	alpha + 2 * gamma * (w1 - w2),   // W
+	beta + 2 * gamma * (w1 - w2),   // N
+	beta + 2 * gamma * (w1 - w2),   // S
+	2 * gamma * w2,                 // NE
+	-2 * gamma * w1,                // NW
+	-2 * gamma * w1,                // SE  
+	2 * gamma * w2                  // SW  
+	};
+
+	//tu ulozim tie koef forw/back nech to nemusim vsetko zvlast indexovat
+	double b_forw[8], b_back[8];
+
+	for (int i = 0; i < 8; i++)
+	{
+		b_forw[i] = std::max(0.0, b[i]);
+		b_back[i] = std::min(0.0, b[i]);
+	}
+
+	Eigen::SparseMatrix<double, Eigen::RowMajor> M(size, size);
+	M.reserve(Eigen::VectorXi::Constant(size, 9));
+
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			int k = i * width + j;
+
+			if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+			{
+				M.insert(k, k) = 1.0;
+				continue;
+			}
+
+			double bcenter = 0.0;
+			for (int s = 0; s < 8; s++)
+			{
+				int q = k + d[s];
+				if (b_forw[s] > 0.0)
+					M.insert(k, q) = -scale * b_forw[s];
+				bcenter += b_forw[s];
+			}
+			M.insert(k, k) = 1.0 + scale * bcenter;
+		}
+	}
+	M.makeCompressed();
+	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+	solver.compute(M);
+	if (solver.info() != Eigen::Success)
+		std::cout << "decomposition failed" << std::endl;
+
+
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
+
+	for (int n = 0; n < steps; n++)
+	{
+		double t_n = Tstart + n * tau;
+
+		std::vector<double> np_plus(size, 0.0);
+		std::vector<double> np_minus(size, 0.0);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				int k = i * width + j;
+				if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+					continue;
+
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+					double flux = b_back[s] * (u_old[k] - u_old[q]);
+					if (u_old[k] > u_old[q])
+						np_plus[k] += flux;
+					else
+						np_minus[k] += flux;
+				}
+				np_plus[k] = -np_plus[k];
+				np_minus[k] = -np_minus[k];
+			}
+		}
+
+		double umin = *std::min_element(u_old.begin(), u_old.end());
+		double umax = *std::max_element(u_old.begin(), u_old.end());
+
+		std::vector<double> theta_plus(size, 1.0);
+		std::vector<double> theta_minus(size, 1.0);
+
+		for (int k = 0; k < size; k++)
+		{
+			double up = u_old[k];
+			//to checkuje ci to neni nula, lebo nechcem delit nulou
+			theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0;
+			theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k])) : 1.0;
+		}
+
+
+
+		Eigen::VectorXd rhs(size);
+
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2. + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				int k = i * width + j;
+				double x = -1.0 - h / 2. + j * h;
+
+				if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+				{
+					rhs(k) = u_exact(x, y, t_n + tau, &D[0][0]);
+					continue;
+				}
+
+				rhs(k) = u_old[k];
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+					double theta_pq = 1.0;
+					if (u_old[k] > u_old[q])
+						theta_pq = std::min(theta_plus[k], theta_minus[q]);
+					else
+						theta_pq = std::min(theta_minus[k], theta_plus[q]);
+
+					double flux = theta_pq * b_back[s] * (u_old[k] - u_old[q]);
+					rhs(k) -= scale * flux;
+				}
+			}
+		}
+
+		Eigen::VectorXd sol = solver.solve(rhs);
+		if (solver.info() != Eigen::Success)
+			std::cout << "solve failed at step " << n << std::endl;
+
+		for (int k = 0; k < size; k++)
+			u_old[k] = sol(k);
+
+
+
+		// error
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2 + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				double x = -1.0 - h / 2 + j * h;
+				int k = i * width + j;
+				double exact = u_exact(x, y, t_n + tau, &D[0][0]);
+				double diff = u_old[k] - exact;
+				error_sum += diff * diff;
+			}
+		}
+	}
+
+	// EXPORT FINAL
+	if (exportData)
+	{
+		std::string finalName = folder + "/final_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream finalFile(finalName);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				finalFile << u_old[i * width + j];
+				if (j < width - 1) finalFile << ",";
+			}
+			finalFile << "\n";
+		}
+		finalFile.close();
+	}
+
+	return std::sqrt(tau * h * h * error_sum);
 }
 
 double Image::S2_FBDS_ADCM(bool exportData)
 {
-	return 0.0;
+	setD();
+
+	int width = N + 2;
+	int height = N + 2;
+	int size = width * height;
+
+	std::vector<double> u_old(size, 0.0);
+
+	double h = 2.0 / N;
+	double tau = h * h;
+	double Tstart = 0.2;
+	double Tend = 0.3;
+	double error_sum = 0.0;
+
+	//INIT 
+	for (int i = 0; i < height; i++)
+	{
+		double y = -1.0 - h / 2 + i * h;
+		for (int j = 0; j < width; j++)
+		{
+			double x = -1.0 - h / 2 + j * h;
+			u_old[i * width + j] = u_exact(x, y, Tstart, &D[0][0]);
+		}
+	}
+
+	std::string folder = "S2_FBDS_ADCM";
+	if (exportData)
+	{
+		std::filesystem::create_directories(folder);
+		std::string filename = folder + "/step_0_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream file(filename);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				file << u_old[i * width + j];
+				if (j < width - 1) file << ",";
+			}
+			file << "\n";
+		}
+		file.close();
+	}
+
+
+	double scale = tau / (h * h);
+	double alpha = D[0][0];
+	double beta = D[1][1];
+	double gamma = D[0][1];
+
+	//smery E, W, N, S, NE, NW, SE, SW
+	const int d[8] = { +1, -1, +width, -width,
+			+width + 1, +width - 1,
+			-width + 1, -width - 1 };
+
+	//koeficienty pre jednotlive smery  v tom poradi ako su v poli d
+	double lambda1 = (alpha + beta + sqrt((alpha - beta) * (alpha - beta) + 4 * gamma * gamma)) / 2.;
+	double lambda2 = (alpha + beta - sqrt((alpha - beta) * (alpha - beta) + 4 * gamma * gamma)) / 2.;
+	double w1 = 0.5 * (lambda1 / (lambda1 + lambda2));
+	double w2 = 0.5 * (lambda2 / (lambda1 + lambda2));
+
+
+	double b[8] = {
+	alpha + 2 * gamma * (w1 - w2),   // E
+	alpha + 2 * gamma * (w1 - w2),   // W
+	beta + 2 * gamma * (w1 - w2),   // N
+	beta + 2 * gamma * (w1 - w2),   // S
+	2 * gamma * w2,                 // NE
+	-2 * gamma * w1,                // NW
+	-2 * gamma * w1,                // SE  
+	2 * gamma * w2                  // SW  
+	};
+
+	//tu ulozim tie koef forw/back nech to nemusim vsetko zvlast indexovat
+	double b_forw[8], b_back[8];
+
+	for (int i = 0; i < 8; i++)
+	{
+		b_forw[i] = std::max(0.0, b[i]);
+		b_back[i] = std::min(0.0, b[i]);
+	}
+
+	Eigen::SparseMatrix<double, Eigen::RowMajor> M(size, size);
+	M.reserve(Eigen::VectorXi::Constant(size, 9));
+
+	for (int i = 0; i < height; i++)
+	{
+		for (int j = 0; j < width; j++)
+		{
+			int k = i * width + j;
+
+			if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+			{
+				M.insert(k, k) = 1.0;
+				continue;
+			}
+
+			double bcenter = 0.0;
+			for (int s = 0; s < 8; s++)
+			{
+				int q = k + d[s];
+				if (b_forw[s] > 0.0)
+					M.insert(k, q) = -scale * b_forw[s];
+				bcenter += b_forw[s];
+			}
+			M.insert(k, k) = 1.0 + scale * bcenter;
+		}
+	}
+	M.makeCompressed();
+	Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+	solver.compute(M);
+	if (solver.info() != Eigen::Success)
+		std::cout << "decomposition failed" << std::endl;
+
+
+	int steps = static_cast<int>(std::round((Tend - Tstart) / tau));
+
+	for (int n = 0; n < steps; n++)
+	{
+		double t_n = Tstart + n * tau;
+
+		double umin = *std::min_element(u_old.begin(), u_old.end());
+		double umax = *std::max_element(u_old.begin(), u_old.end());
+
+		//prvy solve, theta_pq je vlastne =1, lebo nedavame limit
+		Eigen::VectorXd rhs(size);
+
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2. + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				int k = i * width + j;
+				double x = -1.0 - h / 2. + j * h;
+
+				if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+				{
+					rhs(k) = u_exact(x, y, t_n + tau, &D[0][0]);
+					continue;
+				}
+
+				rhs(k) = u_old[k];
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+					double flux = b_back[s] * (u_old[k] - u_old[q]); //(thetu ani nepisem lebo 1)
+					rhs(k) -= scale * flux;
+				}
+			}
+		}
+		Eigen::VectorXd sol = solver.solve(rhs);//solve bez limitu
+
+		//ulozim si ktore to porusuju
+		std::vector<bool> violates(size, false);
+		bool anyViolation = false;
+
+		for (int k = 0; k < size; k++)
+		{
+			if (sol(k) < umin || sol(k) > umax)
+			{
+				violates[k] = true;
+				anyViolation = true;
+			}
+		}
+
+		//akoze teoreticky sa moze stat ze to sa nestane, right? idk
+		if (anyViolation)
+		{
+			std::vector<double> np_plus(size, 0.0);
+			std::vector<double> np_minus(size, 0.0);
+
+			for (int i = 1; i < height - 1; i++)
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+					for (int s = 0; s < 8; s++)
+					{
+						int q = k + d[s];
+						double flux = b_back[s] * (u_old[k] - u_old[q]);
+						if (u_old[k] > u_old[q])
+							np_plus[k] += flux;
+						else
+							np_minus[k] += flux;
+					}
+					np_plus[k] = -np_plus[k];
+					np_minus[k] = -np_minus[k];
+				}
+
+			std::vector<double> theta_plus(size, 1.0);
+			std::vector<double> theta_minus(size, 1.0);
+
+			for (int k = 0; k < size; k++)
+			{
+				double up = u_old[k];
+				theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0;
+				theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k])) : 1.0;
+			}
+
+			//teraz nova prava strana, ale len pre tie ktore porusuju min/max, ostatne zostanu rovnake
+			for (int i = 1; i < height - 1; i++)
+			{
+				double y = -1.0 - h / 2. + i * h;
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+
+					if (!violates[k])
+						continue;
+
+					double x = -1.0 - h / 2. + j * h;
+					rhs(k) = u_old[k];
+
+					for (int s = 0; s < 8; s++)
+					{
+						int q = k + d[s];
+						double theta_pq;
+						if (u_old[k] > u_old[q])
+							theta_pq = std::min(theta_plus[k], theta_minus[q]);
+						else
+							theta_pq = std::min(theta_minus[k], theta_plus[q]);
+
+						double flux = theta_pq * b_back[s] * (u_old[k] - u_old[q]);
+						rhs(k) -= scale * flux;
+					}
+				}
+			}
+
+			sol = solver.solve(rhs);
+
+			if (solver.info() != Eigen::Success)
+				std::cout << "solve failed at step " << n << std::endl;
+		}
+		//toto je rovnaku odtialto
+		for (int k = 0; k < size; k++)
+			u_old[k] = sol(k);
+
+		// error
+		for (int i = 0; i < height; i++)
+		{
+			double y = -1.0 - h / 2 + i * h;
+			for (int j = 0; j < width; j++)
+			{
+				double x = -1.0 - h / 2 + j * h;
+				int k = i * width + j;
+				double exact = u_exact(x, y, t_n + tau, &D[0][0]);
+				double diff = u_old[k] - exact;
+				error_sum += diff * diff;
+			}
+		}
+	}
+
+	// EXPORT FINAL
+	if (exportData)
+	{
+		std::string finalName = folder + "/final_N" + std::to_string(N) +
+			"_theta" + std::to_string(static_cast<int>(theta)) + ".csv";
+
+		std::ofstream finalFile(finalName);
+
+		for (int i = 0; i < height; i++)
+		{
+			for (int j = 0; j < width; j++)
+			{
+				finalFile << u_old[i * width + j];
+				if (j < width - 1) finalFile << ",";
+			}
+			finalFile << "\n";
+		}
+		finalFile.close();
+	}
+
+	return std::sqrt(tau * h * h * error_sum);
 }
 
 

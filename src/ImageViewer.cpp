@@ -412,43 +412,51 @@ void ImageViewer::on_pushButton_anisotropic_clicked()
 
 void ImageViewer::on_pushButton_EOC_clicked()
 {
-	double theta = ui->comboBox_theta->currentText().toDouble();
-	int metoda = ui->comboBox_method->currentIndex();
-
 	std::vector<int> grids = { 20, 40, 80, 160 };
-	std::vector<double> errors;
+	std::vector<double> thetas = { 5, 10, 22.5, 45 };
+	std::vector<std::string> methodNames = {
+		"DCM_Classic", "ADCM_Modified",
+		"S1_FBDS_Classic", "S2_FBDS_Classic",
+		"S1_FBDS_ADCM", "S2_FBDS_ADCM"
+	};
+	int numMethods = 6;
 
-	std::cout << "\nERRORS for theta " << theta << ":\n";
-
-	for (int N : grids)
+	for (double theta : thetas)
 	{
-		img_proc.setN(N);
-		img_proc.setTheta(theta);
+		std::cout << "\n=== Theta " << theta << " ===\n";
+		for (int metoda = 0; metoda < numMethods; metoda++)
+		{
+			std::cout << "\n" << methodNames[metoda] << "\n";
+			std::vector<double> errors;
 
-		double err;
+			for (int N : grids)
+			{
+				img_proc.setN(N);
+				img_proc.setTheta(theta);
+				double err;
+				if (metoda == 0)
+					err = img_proc.Anisotropic_Classic(true);
+				else if (metoda == 1)
+					err = img_proc.Anisotropic_Modified(true);
+				else if (metoda == 2)
+					err = img_proc.S1_FBDS_Classic(true);
+				else if (metoda == 3)
+					err = img_proc.S2_FBDS_Classic(true);
+				else if (metoda == 4)
+					err = img_proc.S1_FBDS_ADCM(true);
+				else if (metoda == 5)
+					err = img_proc.S2_FBDS_ADCM(true);
 
-		if (metoda == 0)
-			err = img_proc.Anisotropic_Classic(false);
-		else if (metoda == 1)
-			err = img_proc.Anisotropic_Modified(false);
-		else if (metoda == 2)
-			err = img_proc.S1_FBDS_Classic(false);
-		else if (metoda == 3)
-			err = img_proc.S2_FBDS_Classic(false);
-		else if (metoda == 4)
-			err = img_proc.S1_FBDS_ADCM(false);
-		else if (metoda == 5)
-			err = img_proc.S2_FBDS_ADCM(false);
-		errors.push_back(err);
+				errors.push_back(err);
+				std::cout << "N=" << N << " error=" << err << "\n";
+			}
 
-		std::cout << "N=" << N << " error=" << err << std::endl;
+			for (size_t i = 1; i < errors.size(); i++)
+			{
+				double eoc = log(errors[i - 1] / errors[i]) / log(2.0);
+				std::cout << "N=" << grids[i] << " EOC=" << eoc << "\n";
+			}
+		}
 	}
-
-	std::cout << "\nEOC for theta "<<theta<<":\n";
-	for (size_t i = 1; i < errors.size(); i++)
-	{
-		double eoc = log(errors[i - 1] / errors[i]) / log(2.0);
-		std::cout << "N=" << grids[i]
-			<< " EOC=" << eoc << std::endl ;
-	}
+	std::cout << "\nDone.\n";
 }
