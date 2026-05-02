@@ -1008,8 +1008,16 @@ double Image::S2_FBDS_Classic(bool exportData)
 	{
 		double t_n = Tstart + n * tau;
 
-		double umin = *std::min_element(u_old.begin(), u_old.end());
-		double umax = *std::max_element(u_old.begin(), u_old.end());
+		double umin = std::numeric_limits<double>::max();
+		double umax = std::numeric_limits<double>::lowest();
+
+		for (int i = 1; i < height - 1; i++)
+			for (int j = 1; j < width - 1; j++)
+			{
+				int k = i * width + j;
+				umin = std::min(umin, u_old[k]);
+				umax = std::max(umax, u_old[k]);
+			}
 
 		//prvy solve, theta_pq je vlastne =1, lebo nedavame limit
 		Eigen::VectorXd rhs(size);
@@ -1043,66 +1051,119 @@ double Image::S2_FBDS_Classic(bool exportData)
 		std::vector<bool> violates(size, false);
 		bool anyViolation = false;
 
-		for (int k = 0; k < size; k++)
+		for (int i = 1; i < height - 1; i++)
 		{
-			if (sol(k) < umin || sol(k) > umax)
+			for (int j = 1; j < width - 1; j++)
 			{
-				violates[k] = true;
-				anyViolation = true;
+				int k = i * width + j;
+				if (sol(k) < umin || sol(k) > umax)
+				{
+					violates[k] = true;
+					anyViolation = true;
+				}
 			}
 		}
 
 		//akoze teoreticky sa moze stat ze to sa nestane, right? idk
-		if (anyViolation)
+		int iter = 0;
+		int maxIter = 20;
+
+		while (anyViolation && iter < maxIter)
 		{
+			iter++;
+
+			std::vector<bool> needsTheta(size, false);
+
+			for (int k = 0; k < size; k++)
+			{
+				if (!violates[k]) continue;
+
+				needsTheta[k] = true;
+
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+
+					if (q >= 0 && q < size)
+					{
+						int qi = q / width;
+						int qj = q % width;
+
+						if (qi > 0 && qi < height - 1 && qj > 0 && qj < width - 1)
+							needsTheta[q] = true;
+					}
+				}
+			}
+
 			std::vector<double> np_plus(size, 0.0);
 			std::vector<double> np_minus(size, 0.0);
 
 			for (int i = 1; i < height - 1; i++)
+			{
 				for (int j = 1; j < width - 1; j++)
 				{
 					int k = i * width + j;
+
+					if (!needsTheta[k]) continue;
+
 					for (int s = 0; s < 8; s++)
 					{
 						int q = k + d[s];
+
 						double flux = b_back[s] * (u_old[k] - u_old[q]);
+
 						if (u_old[k] > u_old[q])
 							np_plus[k] += flux;
 						else
 							np_minus[k] += flux;
 					}
+
 					np_plus[k] = -np_plus[k];
 					np_minus[k] = -np_minus[k];
 				}
+			}
 
 			std::vector<double> theta_plus(size, 1.0);
 			std::vector<double> theta_minus(size, 1.0);
 
 			for (int k = 0; k < size; k++)
 			{
+				if (!needsTheta[k]) continue;
+
 				double up = u_old[k];
-				theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0;
-				theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k])) : 1.0;
+
+				theta_plus[k] = (np_plus[k] > 0.0)
+					? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k]))
+					: 1.0;
+
+				theta_minus[k] = (np_minus[k] < 0.0)
+					? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k]))
+					: 1.0;
 			}
 
-			//teraz nova prava strana, ale len pre tie ktore porusuju min/max, ostatne zostanu rovnake
-			for (int i = 1; i < height - 1; i++)
+			for (int i = 0; i < height; i++)
 			{
-				double y = -1.0 - h / 2. + i * h;
-				for (int j = 1; j < width - 1; j++)
+				double y = -1.0 - h / 2.0 + i * h;
+
+				for (int j = 0; j < width; j++)
 				{
 					int k = i * width + j;
+					double x = -1.0 - h / 2.0 + j * h;
 
-					if (!violates[k])
-						continue;  
+					if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+					{
+						rhs(k) = u_exact(x, y, t_n + tau, &D[0][0]);
+						continue;
+					}
 
-					double x = -1.0 - h / 2. + j * h;
 					rhs(k) = u_old[k];
 
 					for (int s = 0; s < 8; s++)
 					{
 						int q = k + d[s];
-						double theta_pq;
+
+						double theta_pq = 1.0;
+
 						if (u_old[k] > u_old[q])
 							theta_pq = std::min(theta_plus[k], theta_minus[q]);
 						else
@@ -1117,8 +1178,27 @@ double Image::S2_FBDS_Classic(bool exportData)
 			sol = solver.solve(rhs);
 
 			if (solver.info() != Eigen::Success)
-				std::cout << "solve failed at step " << n << std::endl;
+				std::cout << "solve failed at step " << n << ", S2 iter " << iter << std::endl;
+
+			// opatovny check na iteraciu
+			std::fill(violates.begin(), violates.end(), false);
+			anyViolation = false;
+
+			for (int i = 1; i < height - 1; i++)
+			{
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+
+					if (sol(k) < umin || sol(k) > umax)
+					{
+						violates[k] = true;
+						anyViolation = true;
+					}
+				}
+			}
 		}
+
 		//toto je rovnaku odtialto
 		for (int k = 0; k < size; k++)
 			u_old[k] = sol(k);
@@ -1533,8 +1613,18 @@ double Image::S2_FBDS_ADCM(bool exportData)
 	{
 		double t_n = Tstart + n * tau;
 
-		double umin = *std::min_element(u_old.begin(), u_old.end());
-		double umax = *std::max_element(u_old.begin(), u_old.end());
+		double umin = std::numeric_limits<double>::max();
+		double umax = std::numeric_limits<double>::lowest();
+
+		for (int i = 1; i < height - 1; i++)
+		{
+			for (int j = 1; j < width - 1; j++)
+			{
+				int k = i * width + j;
+				umin = std::min(umin, u_old[k]);
+				umax = std::max(umax, u_old[k]);
+			}
+		}
 
 		//prvy solve, theta_pq je vlastne =1, lebo nedavame limit
 		Eigen::VectorXd rhs(size);
@@ -1554,80 +1644,137 @@ double Image::S2_FBDS_ADCM(bool exportData)
 				}
 
 				rhs(k) = u_old[k];
+
 				for (int s = 0; s < 8; s++)
 				{
 					int q = k + d[s];
-					double flux = b_back[s] * (u_old[k] - u_old[q]); //(thetu ani nepisem lebo 1)
+					double flux = b_back[s] * (u_old[k] - u_old[q]);
 					rhs(k) -= scale * flux;
 				}
 			}
 		}
+
 		Eigen::VectorXd sol = solver.solve(rhs);//solve bez limitu
 
 		//ulozim si ktore to porusuju
 		std::vector<bool> violates(size, false);
 		bool anyViolation = false;
 
-		for (int k = 0; k < size; k++)
+		double eps = 1e-12;
+
+		for (int i = 1; i < height - 1; i++)
 		{
-			if (sol(k) < umin || sol(k) > umax)
+			for (int j = 1; j < width - 1; j++)
 			{
-				violates[k] = true;
-				anyViolation = true;
+				int k = i * width + j;
+
+				if (sol(k) < umin - eps || sol(k) > umax + eps)
+				{
+					violates[k] = true;
+					anyViolation = true;
+				}
 			}
 		}
 
-		//akoze teoreticky sa moze stat ze to sa nestane, right? idk
-		if (anyViolation)
+		int iter = 0;
+		int maxIter = 20;
+
+		while (anyViolation && iter < maxIter)
 		{
+			iter++;
+
+			std::vector<bool> needsTheta(size, false);
+
+			for (int k = 0; k < size; k++)
+			{
+				if (!violates[k]) continue;
+
+				needsTheta[k] = true;
+
+				for (int s = 0; s < 8; s++)
+				{
+					int q = k + d[s];
+
+					if (q >= 0 && q < size)
+					{
+						int qi = q / width;
+						int qj = q % width;
+
+						if (qi > 0 && qi < height - 1 && qj > 0 && qj < width - 1)
+							needsTheta[q] = true;
+					}
+				}
+			}
+
 			std::vector<double> np_plus(size, 0.0);
 			std::vector<double> np_minus(size, 0.0);
 
 			for (int i = 1; i < height - 1; i++)
+			{
 				for (int j = 1; j < width - 1; j++)
 				{
 					int k = i * width + j;
+
+					if (!needsTheta[k]) continue;
+
 					for (int s = 0; s < 8; s++)
 					{
 						int q = k + d[s];
+
 						double flux = b_back[s] * (u_old[k] - u_old[q]);
+
 						if (u_old[k] > u_old[q])
 							np_plus[k] += flux;
 						else
 							np_minus[k] += flux;
 					}
+
 					np_plus[k] = -np_plus[k];
 					np_minus[k] = -np_minus[k];
 				}
+			}
 
 			std::vector<double> theta_plus(size, 1.0);
 			std::vector<double> theta_minus(size, 1.0);
 
 			for (int k = 0; k < size; k++)
 			{
+				if (!needsTheta[k]) continue;
+
 				double up = u_old[k];
-				theta_plus[k] = (np_plus[k] > 0.0) ? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k])) : 1.0;
-				theta_minus[k] = (np_minus[k] < 0.0) ? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k])) : 1.0;
+
+				theta_plus[k] = (np_plus[k] > 0.0)
+					? std::min(1.0, (umax - up) * h * h / (tau * np_plus[k]))
+					: 1.0;
+
+				theta_minus[k] = (np_minus[k] < 0.0)
+					? std::min(1.0, (umin - up) * h * h / (tau * np_minus[k]))
+					: 1.0;
 			}
 
-			//teraz nova prava strana, ale len pre tie ktore porusuju min/max, ostatne zostanu rovnake
-			for (int i = 1; i < height - 1; i++)
+			for (int i = 0; i < height; i++)
 			{
-				double y = -1.0 - h / 2. + i * h;
-				for (int j = 1; j < width - 1; j++)
+				double y = -1.0 - h / 2.0 + i * h;
+
+				for (int j = 0; j < width; j++)
 				{
 					int k = i * width + j;
+					double x = -1.0 - h / 2.0 + j * h;
 
-					if (!violates[k])
+					if (i == 0 || i == height - 1 || j == 0 || j == width - 1)
+					{
+						rhs(k) = u_exact(x, y, t_n + tau, &D[0][0]);
 						continue;
+					}
 
-					double x = -1.0 - h / 2. + j * h;
 					rhs(k) = u_old[k];
 
 					for (int s = 0; s < 8; s++)
 					{
 						int q = k + d[s];
-						double theta_pq;
+
+						double theta_pq = 1.0;
+
 						if (u_old[k] > u_old[q])
 							theta_pq = std::min(theta_plus[k], theta_minus[q]);
 						else
@@ -1642,7 +1789,24 @@ double Image::S2_FBDS_ADCM(bool exportData)
 			sol = solver.solve(rhs);
 
 			if (solver.info() != Eigen::Success)
-				std::cout << "solve failed at step " << n << std::endl;
+				std::cout << "solve failed at step " << n << ", S2 iter " << iter << std::endl;
+
+			std::fill(violates.begin(), violates.end(), false);
+			anyViolation = false;
+
+			for (int i = 1; i < height - 1; i++)
+			{
+				for (int j = 1; j < width - 1; j++)
+				{
+					int k = i * width + j;
+
+					if (sol(k) < umin - eps || sol(k) > umax + eps)
+					{
+						violates[k] = true;
+						anyViolation = true;
+					}
+				}
+			}
 		}
 		//toto je rovnaku odtialto
 		for (int k = 0; k < size; k++)
