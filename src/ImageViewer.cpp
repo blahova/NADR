@@ -26,6 +26,19 @@ ImageViewer::ImageViewer(QWidget* parent)
 	viewGroup->addButton(ui->radioButton_smooth);
 	connect(viewGroup, QOverload<QAbstractButton*>::of(&QButtonGroup::buttonClicked), this,&ImageViewer::onViewChanged);
 
+	fieldGroup = new QButtonGroup(this);
+	fieldGroup->setExclusive(true);
+
+	fieldGroup->addButton(ui->radioButton_field1, 0);
+	fieldGroup->addButton(ui->radioButton_field2, 1);
+	fieldGroup->addButton(ui->radioButton_field3, 2);
+	ui->radioButton_field1->setChecked(true);
+	ui->radioButton_field1->setEnabled(false);
+	ui->radioButton_field2->setEnabled(false);
+	ui->radioButton_field3->setEnabled(false);
+
+	connect(fieldGroup, QOverload<int>::of(&QButtonGroup::idClicked), this, &ImageViewer::onFieldChanged);
+
 	radioButtonSetup();
 }
 
@@ -254,6 +267,34 @@ bool ImageViewer::showSmooth()
 	return true;
 }
 
+bool ImageViewer::showData(double* procData)
+{
+	if (vW->isEmpty() || !procData)
+		return false;
+
+	int width = img_proc.getwidth();
+	int height = img_proc.getheight();
+
+	for (int y = 0; y < height; y++)
+	{
+		int row = y * width;
+
+		for (int x = 0; x < width; x++)
+		{
+			int id = row + x;
+
+			double val = procData[id];
+			if (val < 0.0) val = 0.0;
+			if (val > 1.0) val = 1.0;
+
+			uchar pixelValue = static_cast<uchar>(val * 255.0 + 0.5);
+			vW->setPixel(x, y, pixelValue);
+		}
+	}
+
+	vW->update();
+	return true;
+}
 
 
 
@@ -340,6 +381,25 @@ void ImageViewer::onViewChanged(QAbstractButton* button)
 	{
 		showSmooth();
 	}
+}
+
+void ImageViewer::onFieldChanged(int id)
+{
+	currentField = id;
+
+	int frames = img_proc.getEvolutionFrameCount(currentField);
+	if (frames == 0)
+		return;
+
+	int frame = ui->verticalSlider_time->value();
+
+	if (frame >= frames)
+		frame = frames - 1;
+
+	ui->verticalSlider_time->setMaximum(frames - 1);
+	ui->verticalSlider_time->setValue(frame);
+
+	showData(img_proc.getEvolutionFrame(currentField, frame));
 }
 
 
@@ -451,4 +511,52 @@ void ImageViewer::on_pushButton_EOC_clicked()
 		std::cout <<  eoc << std::endl ;
 	}
 	std::cout <<std::endl;
+}
+
+//posledne zadanie
+void ImageViewer::on_pushButton_run_clicked()
+{
+	double tau = ui->doubleSpinBox_tau->value();
+	int steps = ui->spinBox_steps->value();
+	int N = ui->spinBox_N->value();
+	double K1 = ui->doubleSpinBox_K1->value();
+	double K2 = ui->doubleSpinBox_K2->value();
+
+	img_proc.generateRandomImage(N);
+	vW->changeSize(N, N);
+	showOriginal();
+
+	img_proc.setTau(tau);
+	img_proc.setTimeSteps(steps);
+	img_proc.setK1(K1);
+	img_proc.setK2(K2);
+
+	img_proc.variableDCM();
+	ui->radioButton_field1->setEnabled(true);
+	ui->radioButton_field2->setEnabled(true);
+	ui->radioButton_field3->setEnabled(true);
+
+	int frames = img_proc.getEvolutionFrameCount(currentField);
+	int lastFrame = frames - 1;
+
+	ui->verticalSlider_time->setMinimum(0);
+	ui->verticalSlider_time->setMaximum(lastFrame);
+	ui->verticalSlider_time->setValue(lastFrame);
+	ui->verticalSlider_time->setEnabled(true);
+
+	showData(img_proc.getEvolutionFrame(currentField, lastFrame));
+
+}
+
+void ImageViewer::on_verticalSlider_time_valueChanged(int value)
+{
+	if (!ui->verticalSlider_time->isEnabled())
+		return;
+
+	if (img_proc.getEvolutionFrameCount(currentField) == 0)
+		return;
+
+	double* data = img_proc.getEvolutionFrame(currentField, value);
+
+	showData(data);
 }

@@ -89,9 +89,18 @@ void ViewerWidget::setPixel(int x, int y, uchar r, uchar g, uchar b, uchar a)
 }
 void ViewerWidget::setPixel(int x, int y, uchar val)
 {
-	if (val > 255) val = 255;
-	if (val < 0) val = 0;
-	data[y * img->bytesPerLine() + x] = val;
+	if (!img || x < 0 || y < 0 || x >= img->width() || y >= img->height())
+		return;
+
+	if (img->depth() == 8)
+	{
+		data[y * img->bytesPerLine() + x] = val;
+	}
+	else if (img->depth() == 32)
+	{
+		QRgb* line = reinterpret_cast<QRgb*>(img->scanLine(y));
+		line[x] = qRgba(val, val, val, 255);
+	}
 }
 void ViewerWidget::setPixel(int x, int y, double val)
 {

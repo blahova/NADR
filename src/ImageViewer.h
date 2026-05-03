@@ -20,6 +20,8 @@ private:
 	ViewerWidget* vW;
 
 	QButtonGroup* viewGroup;
+	QButtonGroup* fieldGroup;
+	int currentField = 0;
 
 	QSettings settings;
 	QMessageBox msgBox;
@@ -38,6 +40,7 @@ private:
 	bool showMask();
 	bool showLaplace();
 	bool showSmooth();
+	bool showData(double* procData);
 
 	void radioButtonSetup();
 
@@ -53,4 +56,9 @@ private slots:
 
 	void on_pushButton_anisotropic_clicked();
 	void on_pushButton_EOC_clicked();
+
+
+	void on_pushButton_run_clicked();
+	void onFieldChanged(int id);
+	void on_verticalSlider_time_valueChanged(int value);
 };
